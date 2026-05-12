@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>AI Image Classifier</title>
+</head>
+
+<body>
+
+<h1>
+Upload Images
+</h1>
+
+<input
+    type="file"
+    id="fileInput"
+    multiple
+>
+
+<button onclick="uploadFiles()">
+    Upload
+</button>
+
+<h2 id="status"></h2>
+
+<script>
+
+async function uploadFiles() {
+
+    const fileInput =
+        document.getElementById("fileInput");
+
+    const files = fileInput.files;
+
+    const formData = new FormData();
+
+    for (let i = 0; i < files.length; i++) {
+
+        formData.append("files", files[i]);
+    }
+
+    document.getElementById("status").innerText =
+        "Processing...";
+
+    const response = await fetch(
+        "/upload",
+        {
+            method: "POST",
+            body: formData
+        }
+    );
+
+    const blob = await response.blob();
+
+    const url =
+        window.URL.createObjectURL(blob);
+
+    const a =
+        document.createElement("a");
+
+    a.href = url;
+
+    a.download = "classified_images.zip";
+
+    document.body.appendChild(a);
+
+    a.click();
+
+    a.remove();
+
+    document.getElementById("status").innerText =
+        "Completed!";
+}
+
+</script>
+
+</body>
+
+</html>
