@@ -1,12 +1,22 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 
-    <title>AI Interior / Exterior Classifier</title>
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0"
+    />
 
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <title>
+        AI Interior / Exterior Classifier
+    </title>
+
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap"
+        rel="stylesheet"
+    >
 
     <style>
 
@@ -17,177 +27,278 @@
         }
 
         body {
+
             font-family: 'Inter', sans-serif;
+
             background: #0f172a;
+
             color: #f8fafc;
+
             min-height: 100vh;
+
             display: flex;
+
             justify-content: center;
+
             align-items: center;
+
             padding: 30px;
         }
 
         .container {
+
             width: 100%;
+
             max-width: 1100px;
+
             background: #111827;
+
             border-radius: 24px;
+
             padding: 40px;
+
             box-shadow: 0 20px 60px rgba(0,0,0,0.45);
+
             border: 1px solid rgba(255,255,255,0.08);
         }
 
         .header {
+
             text-align: center;
+
             margin-bottom: 35px;
         }
 
         .header h1 {
-            font-size: 38px;
+
+            font-size: 42px;
+
             font-weight: 700;
-            margin-bottom: 10px;
-            color: #ffffff;
+
+            margin-bottom: 12px;
         }
 
         .header p {
+
             color: #94a3b8;
-            font-size: 16px;
+
+            font-size: 17px;
+
             line-height: 1.6;
         }
 
         .upload-box {
+
             border: 2px dashed #3b82f6;
+
             border-radius: 20px;
-            padding: 45px;
+
+            padding: 55px;
+
             text-align: center;
+
             background: rgba(59,130,246,0.08);
+
             transition: 0.3s ease;
+
             cursor: pointer;
         }
 
         .upload-box:hover {
+
             background: rgba(59,130,246,0.14);
+
             transform: translateY(-2px);
         }
 
         .upload-box.dragover {
+
             background: rgba(59,130,246,0.2);
+
             border-color: #60a5fa;
         }
 
         .upload-icon {
-            font-size: 60px;
-            margin-bottom: 15px;
+
+            font-size: 65px;
+
+            margin-bottom: 18px;
         }
 
         .upload-title {
-            font-size: 22px;
-            font-weight: 600;
+
+            font-size: 30px;
+
+            font-weight: 700;
+
             margin-bottom: 10px;
         }
 
         .upload-subtitle {
+
             color: #94a3b8;
-            font-size: 15px;
+
+            font-size: 16px;
         }
 
         input[type="file"] {
+
             display: none;
         }
 
         .preview-section {
-            margin-top: 35px;
+
+            margin-top: 40px;
         }
 
         .preview-title {
-            margin-bottom: 18px;
-            font-size: 20px;
+
+            margin-bottom: 20px;
+
+            font-size: 22px;
+
             font-weight: 600;
         }
 
         .preview-grid {
+
             display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+
+            grid-template-columns:
+                repeat(auto-fill, minmax(170px, 1fr));
+
             gap: 18px;
         }
 
         .preview-card {
+
             background: #1e293b;
+
             border-radius: 16px;
+
             overflow: hidden;
+
             border: 1px solid rgba(255,255,255,0.08);
         }
 
         .preview-card img {
+
             width: 100%;
+
             height: 150px;
+
             object-fit: cover;
+
             display: block;
         }
 
         .preview-name {
+
             padding: 12px;
+
             font-size: 13px;
+
             color: #cbd5e1;
+
             white-space: nowrap;
+
             overflow: hidden;
+
             text-overflow: ellipsis;
         }
 
         .actions {
-            margin-top: 35px;
+
+            margin-top: 40px;
+
             display: flex;
+
             justify-content: center;
         }
 
         .upload-btn {
-            background: linear-gradient(135deg, #2563eb, #3b82f6);
+
+            background:
+                linear-gradient(
+                    135deg,
+                    #2563eb,
+                    #3b82f6
+                );
+
             color: white;
+
             border: none;
-            padding: 16px 36px;
+
+            padding: 18px 40px;
+
             border-radius: 14px;
-            font-size: 16px;
+
+            font-size: 17px;
+
             font-weight: 600;
+
             cursor: pointer;
+
             transition: 0.3s ease;
-            box-shadow: 0 10px 25px rgba(37,99,235,0.35);
+
+            box-shadow:
+                0 10px 25px rgba(37,99,235,0.35);
         }
 
         .upload-btn:hover {
+
             transform: translateY(-2px);
+
             opacity: 0.95;
         }
 
         .upload-btn:disabled {
+
             opacity: 0.5;
+
             cursor: not-allowed;
         }
 
         .loading {
-            margin-top: 28px;
+
+            margin-top: 30px;
+
             text-align: center;
+
             display: none;
         }
 
         .spinner {
-            width: 50px;
-            height: 50px;
-            border: 5px solid rgba(255,255,255,0.15);
+
+            width: 55px;
+
+            height: 55px;
+
+            border:
+                5px solid rgba(255,255,255,0.15);
+
             border-top-color: #3b82f6;
+
             border-radius: 50%;
+
             animation: spin 1s linear infinite;
+
             margin: 0 auto 15px;
         }
 
         @keyframes spin {
+
             to {
                 transform: rotate(360deg);
             }
         }
 
         .footer-text {
-            margin-top: 20px;
+
+            margin-top: 18px;
+
             color: #94a3b8;
+
             font-size: 14px;
         }
 
@@ -198,38 +309,57 @@
             }
 
             .header h1 {
-                font-size: 28px;
+                font-size: 30px;
             }
 
             .upload-box {
-                padding: 30px 20px;
+                padding: 35px 20px;
             }
 
             .preview-grid {
-                grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+
+                grid-template-columns:
+                    repeat(auto-fill, minmax(140px, 1fr));
             }
         }
 
     </style>
+
 </head>
+
 <body>
 
     <div class="container">
 
         <div class="header">
-            <h1>AI Interior / Exterior Classifier</h1>
+
+            <h1>
+                AI Interior / Exterior Classifier
+            </h1>
 
             <p>
-                Upload multiple images and let the AI automatically classify
-                them into Interior and Exterior categories.
+                Upload multiple images and let the AI
+                automatically classify them into
+                Interior and Exterior categories.
             </p>
+
         </div>
 
-        <form id="uploadForm">
+        <form
+            id="uploadForm"
+            action="/upload"
+            method="post"
+            enctype="multipart/form-data"
+        >
 
-            <label class="upload-box" id="dropArea">
+            <label
+                class="upload-box"
+                id="dropArea"
+            >
 
-                <div class="upload-icon">📸</div>
+                <div class="upload-icon">
+                    📸
+                </div>
 
                 <div class="upload-title">
                     Drag & Drop Images Here
@@ -255,7 +385,10 @@
                     Selected Images
                 </div>
 
-                <div class="preview-grid" id="previewGrid"></div>
+                <div
+                    class="preview-grid"
+                    id="previewGrid"
+                ></div>
 
             </div>
 
@@ -267,14 +400,19 @@
                     id="uploadBtn"
                     disabled
                 >
+
                     Upload & Classify
+
                 </button>
 
             </div>
 
         </form>
 
-        <div class="loading" id="loading">
+        <div
+            class="loading"
+            id="loading"
+        >
 
             <div class="spinner"></div>
 
@@ -283,7 +421,10 @@
             </div>
 
             <div class="footer-text">
-                Please wait while the ZIP package is generated.
+
+                Please wait while the ZIP package
+                is generated.
+
             </div>
 
         </div>
@@ -292,60 +433,104 @@
 
     <script>
 
-        const fileInput = document.getElementById('fileInput');
-        const previewGrid = document.getElementById('previewGrid');
-        const uploadBtn = document.getElementById('uploadBtn');
-        const uploadForm = document.getElementById('uploadForm');
-        const loading = document.getElementById('loading');
-        const dropArea = document.getElementById('dropArea');
+        const fileInput =
+            document.getElementById('fileInput');
+
+        const previewGrid =
+            document.getElementById('previewGrid');
+
+        const uploadBtn =
+            document.getElementById('uploadBtn');
+
+        const uploadForm =
+            document.getElementById('uploadForm');
+
+        const loading =
+            document.getElementById('loading');
+
+        const dropArea =
+            document.getElementById('dropArea');
 
         let selectedFiles = [];
 
-        fileInput.addEventListener('change', (event) => {
-            selectedFiles = [...event.target.files];
-            renderPreview();
-        });
+        fileInput.addEventListener(
+            'change',
+            (event) => {
 
-        dropArea.addEventListener('dragover', (e) => {
-            e.preventDefault();
-            dropArea.classList.add('dragover');
-        });
+                selectedFiles =
+                    [...event.target.files];
 
-        dropArea.addEventListener('dragleave', () => {
-            dropArea.classList.remove('dragover');
-        });
+                renderPreview();
+            }
+        );
 
-        dropArea.addEventListener('drop', (e) => {
-            e.preventDefault();
-            dropArea.classList.remove('dragover');
+        dropArea.addEventListener(
+            'dragover',
+            (e) => {
 
-            selectedFiles = [...e.dataTransfer.files];
+                e.preventDefault();
 
-            fileInput.files = e.dataTransfer.files;
+                dropArea.classList.add(
+                    'dragover'
+                );
+            }
+        );
 
-            renderPreview();
-        });
+        dropArea.addEventListener(
+            'dragleave',
+            () => {
+
+                dropArea.classList.remove(
+                    'dragover'
+                );
+            }
+        );
+
+        dropArea.addEventListener(
+            'drop',
+            (e) => {
+
+                e.preventDefault();
+
+                dropArea.classList.remove(
+                    'dragover'
+                );
+
+                selectedFiles =
+                    [...e.dataTransfer.files];
+
+                fileInput.files =
+                    e.dataTransfer.files;
+
+                renderPreview();
+            }
+        );
 
         function renderPreview() {
 
             previewGrid.innerHTML = '';
 
-            if (selectedFiles.length > 0) {
-                uploadBtn.disabled = false;
-            }
+            uploadBtn.disabled =
+                selectedFiles.length === 0;
 
             selectedFiles.forEach(file => {
 
-                const reader = new FileReader();
+                const reader =
+                    new FileReader();
 
                 reader.onload = function(e) {
 
-                    const card = document.createElement('div');
-                    card.className = 'preview-card';
+                    const card =
+                        document.createElement('div');
+
+                    card.className =
+                        'preview-card';
 
                     card.innerHTML = `
-                        <img src="${e.target.result}" alt="preview">
-                        <div class="preview-name">${file.name}</div>
+                        <img src="${e.target.result}">
+                        <div class="preview-name">
+                            ${file.name}
+                        </div>
                     `;
 
                     previewGrid.appendChild(card);
@@ -355,59 +540,15 @@
             });
         }
 
-        uploadForm.addEventListener('submit', async (e) => {
+        uploadForm.addEventListener(
+            'submit',
+            () => {
 
-            e.preventDefault();
+                loading.style.display = 'block';
 
-            if (selectedFiles.length === 0) {
-                return;
+                uploadBtn.disabled = true;
             }
-
-            loading.style.display = 'block';
-            uploadBtn.disabled = true;
-
-            const formData = new FormData();
-
-            selectedFiles.forEach(file => {
-                formData.append('files', file);
-            });
-
-            try {
-
-                const response = await fetch('/upload', {
-                    method: 'POST',
-                    body: formData
-                });
-
-                if (!response.ok) {
-                    throw new Error('Upload failed');
-                }
-
-                const blob = await response.blob();
-
-                const url = window.URL.createObjectURL(blob);
-
-                const a = document.createElement('a');
-
-                a.href = url;
-                a.download = 'classified_images.zip';
-
-                document.body.appendChild(a);
-                a.click();
-                a.remove();
-
-                window.URL.revokeObjectURL(url);
-
-            } catch (error) {
-
-                alert('Error occurred while processing images');
-                console.error(error);
-            }
-
-            loading.style.display = 'none';
-            uploadBtn.disabled = false;
-
-        });
+        );
 
     </script>
 
