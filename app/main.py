@@ -1,17 +1,14 @@
 from fastapi import FastAPI, UploadFile, File, Request
-
-from fastapi.responses import (
-    HTMLResponse,
-    StreamingResponse
-)
-
+from fastapi.responses import HTMLResponse, FileResponse
 from fastapi.templating import Jinja2Templates
+from fastapi.background import BackgroundTask
 
 from typing import List
 
 import os
 import uuid
 import shutil
+import zipfile
 
 from app.predict import classify_and_organize
 
@@ -28,6 +25,14 @@ async def home(request: Request):
     return templates.TemplateResponse(
         request=request,
         name="index.html"
+    )
+
+
+def cleanup(path: str):
+
+    shutil.rmtree(
+        path,
+        ignore_errors=True
     )
 
 
@@ -78,22 +83,39 @@ async def upload_images(
         output_dir
     )
 
-    zip_path = shutil.make_archive(
-        output_dir,
-        'zip',
-        output_dir
-    )
+    zip_path = f"{output_dir}.zip"
 
-    zip_file = open(
+    with zipfile.ZipFile(
         zip_path,
-        "rb"
-    )
+        "w",
+        compression=zipfile.ZIP_STORED
+    ) as zipf:
 
-    return StreamingResponse(
-        zip_file,
+        for root, dirs, files in os.walk(output_dir):
+
+            for file in files:
+
+                file_path = os.path.join(
+                    root,
+                    file
+                )
+
+                arcname = os.path.relpath(
+                    file_path,
+                    output_dir
+                )
+
+                zipf.write(
+                    file_path,
+                    arcname
+                )
+
+    return FileResponse(
+        path=zip_path,
         media_type="application/zip",
-        headers={
-            "Content-Disposition":
-            "attachment; filename=classified_images.zip"
-        }
+        filename="classified_images.zip",
+        background=BackgroundTask(
+            cleanup,
+            base_dir
+        )
     )
