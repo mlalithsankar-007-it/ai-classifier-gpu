@@ -324,6 +324,76 @@
             flex-wrap: wrap;
         }
 
+        .classification-result {
+            display: grid;
+            gap: 18px;
+            margin-top: 28px;
+            padding: 22px 20px;
+            border-radius: 24px;
+            background: rgba(15, 23, 42, 0.9);
+            border: 1px solid rgba(148, 163, 184, 0.14);
+        }
+
+        .classification-columns {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 18px;
+        }
+
+        .result-column {
+            display: flex;
+            flex-direction: column;
+            gap: 14px;
+        }
+
+        .result-column h3 {
+            margin: 0;
+            color: #ffffff;
+            font-size: 18px;
+        }
+
+        .result-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+            gap: 12px;
+        }
+
+        .result-card {
+            border-radius: 18px;
+            overflow: hidden;
+            background: rgba(15, 23, 42, 0.95);
+            border: 1px solid rgba(148, 163, 184, 0.14);
+        }
+
+        .result-card img {
+            width: 100%;
+            aspect-ratio: 1/1;
+            object-fit: cover;
+            display: block;
+        }
+
+        .result-card span {
+            display: block;
+            padding: 10px 12px;
+            color: #cbd5e1;
+            font-size: 13px;
+            text-align: center;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .empty-state {
+            color: #94a3b8;
+            font-size: 14px;
+        }
+
+        @media (max-width: 900px) {
+            .classification-columns {
+                grid-template-columns: 1fr;
+            }
+        }
+
         .preview-header h2 {
             font-size: 20px;
             color: #ffffff;
@@ -598,6 +668,19 @@
                         <div class="preview-grid" id="previewGrid"></div>
                     </div>
 
+                    <div class="classification-result hidden" id="classificationResult">
+                        <div class="classification-columns">
+                            <div class="result-column">
+                                <h3>Exterior images</h3>
+                                <div class="result-grid" id="exteriorGrid"></div>
+                            </div>
+                            <div class="result-column">
+                                <h3>Interior images</h3>
+                                <div class="result-grid" id="interiorGrid"></div>
+                            </div>
+                        </div>
+                    </div>
+
                     <div class="status-panel hidden" id="statusPanel">
                         <div class="status-top">
                             <span class="status-label" id="statusLabel">Uploading images...</span>
@@ -634,8 +717,11 @@
         const progressFill = document.getElementById('progressFill');
         const downloadBtn = document.getElementById('downloadBtn');
         const dropArea = document.getElementById('dropArea');
+        const classificationResult = document.getElementById('classificationResult');
+        const exteriorGrid = document.getElementById('exteriorGrid');
+        const interiorGrid = document.getElementById('interiorGrid');
         let selectedFiles = [];
-        let zipBlobUrl = null;
+        let previewSessionId = null;
 
         function setProgress(percent, label, description) {
             progressFill.style.width = `${percent}%`;
@@ -647,18 +733,22 @@
         function resetStatus() {
             statusPanel.classList.add('hidden');
             downloadBtn.classList.add('hidden');
+            classificationResult.classList.add('hidden');
+            exteriorGrid.innerHTML = '';
+            interiorGrid.innerHTML = '';
             setProgress(0, 'Uploading images...', 'Preparing your upload.');
-            if (zipBlobUrl) {
-                URL.revokeObjectURL(zipBlobUrl);
-                zipBlobUrl = null;
-            }
         }
 
         function resetForm() {
             selectedFiles = [];
+            previewSessionId = null;
             fileInput.value = '';
             previewGrid.innerHTML = '';
+            classificationResult.classList.add('hidden');
+            exteriorGrid.innerHTML = '';
+            interiorGrid.innerHTML = '';
             uploadBtn.disabled = true;
+            uploadBtn.style.display = '';
             resetStatus();
         }
 
@@ -679,6 +769,41 @@
                 };
                 reader.readAsDataURL(file);
             });
+        }
+
+        function renderClassificationPreview(data) {
+            previewSessionId = data.session_id;
+            classificationResult.classList.remove('hidden');
+            exteriorGrid.innerHTML = '';
+            interiorGrid.innerHTML = '';
+
+            if (data.exterior.length === 0) {
+                exteriorGrid.innerHTML = '<div class="empty-state">No exterior images were detected.</div>';
+            } else {
+                data.exterior.forEach((filename) => {
+                    const card = document.createElement('div');
+                    card.className = 'result-card';
+                    card.innerHTML = `
+                        <img src="/preview/${encodeURIComponent(data.session_id)}/exterior/${encodeURIComponent(filename)}" alt="${filename}">
+                        <span>${filename}</span>
+                    `;
+                    exteriorGrid.appendChild(card);
+                });
+            }
+
+            if (data.interior.length === 0) {
+                interiorGrid.innerHTML = '<div class="empty-state">No interior images were detected.</div>';
+            } else {
+                data.interior.forEach((filename) => {
+                    const card = document.createElement('div');
+                    card.className = 'result-card';
+                    card.innerHTML = `
+                        <img src="/preview/${encodeURIComponent(data.session_id)}/interior/${encodeURIComponent(filename)}" alt="${filename}">
+                        <span>${filename}</span>
+                    `;
+                    interiorGrid.appendChild(card);
+                });
+            }
         }
 
         fileInput.addEventListener('change', (event) => {
@@ -726,7 +851,7 @@
 
             const xhr = new XMLHttpRequest();
             xhr.open('POST', '/upload');
-            xhr.responseType = 'blob';
+            xhr.responseType = 'json';
 
             xhr.upload.onprogress = (e) => {
                 if (e.lengthComputable) {
@@ -742,10 +867,10 @@
             };
 
             xhr.onload = () => {
-                if (xhr.status === 200) {
-                    const blob = xhr.response;
-                    zipBlobUrl = URL.createObjectURL(blob);
-                    downloadBtn.href = zipBlobUrl;
+                if (xhr.status === 200 && xhr.response) {
+                    const data = xhr.response;
+                    renderClassificationPreview(data);
+                    downloadBtn.href = data.download_url;
                     statusPanel.classList.remove('hidden');
                     setProgress(100, 'Separation Completed', 'Your ZIP file is ready for download.');
                     downloadBtn.classList.remove('hidden');
