@@ -499,8 +499,11 @@
                 selectedFiles =
                     [...e.dataTransfer.files];
 
-                fileInput.files =
-                    e.dataTransfer.files;
+                const dataTransfer = new DataTransfer();
+                selectedFiles.forEach((file) => {
+                    dataTransfer.items.add(file);
+                });
+                fileInput.files = dataTransfer.files;
 
                 renderPreview();
             }
