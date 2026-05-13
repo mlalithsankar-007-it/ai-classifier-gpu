@@ -253,6 +253,13 @@
         }
 
         .upload-box {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            width: 100%;
+            min-width: 0;
+            min-height: 240px;
             border: 1px solid rgba(59, 130, 246, 0.35);
             border-radius: 28px;
             padding: 42px 28px;
@@ -262,7 +269,6 @@
             cursor: pointer;
             position: relative;
             overflow: hidden;
-
             box-shadow:
                 0 0 0 1px rgba(59, 130, 246, 0.08),
                 0 0 40px rgba(37, 99, 235, 0.12);
@@ -272,6 +278,10 @@
             border-color: rgba(59, 130, 246, 0.75);
             background: rgba(59, 130, 246, 0.12);
             transform: translateY(-1px);
+        }
+
+        .upload-title {
+            white-space: nowrap;
         }
 
         .upload-box.dragover {
