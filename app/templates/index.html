@@ -267,21 +267,26 @@
         }
 
         .upload-box {
-            border: 1px dashed rgba(148, 163, 184, 0.32);
+            border: 1px solid rgba(148, 163, 184, 0.28);
             border-radius: 28px;
             padding: 42px 28px;
             text-align: center;
-            background: rgba(148, 163, 184, 0.06);
-            transition: all 0.25s ease;
+            background: rgba(148, 163, 184, 0.05);
+            transition: transform 0.25s ease, border-color 0.25s ease, background-color 0.25s ease;
             cursor: pointer;
             position: relative;
             overflow: hidden;
         }
 
         .upload-box:hover {
-            border-color: rgba(59, 130, 246, 0.7);
-            background: rgba(59, 130, 246, 0.1);
+            border-color: rgba(59, 130, 246, 0.75);
+            background: rgba(59, 130, 246, 0.12);
             transform: translateY(-1px);
+        }
+
+        .upload-box.dragover {
+            border-color: #60a5fa;
+            background: rgba(59, 130, 246, 0.18);
         }
 
         .upload-box.dragover {
@@ -402,37 +407,82 @@
             box-shadow: none;
         }
 
-        .loading {
-            display: none;
-            margin-top: 10px;
-            text-align: center;
-            padding: 18px 16px;
-            border-radius: 18px;
+        .status-panel {
+            display: grid;
+            gap: 16px;
+            margin-top: 26px;
+            padding: 22px 20px;
+            border-radius: 24px;
             background: rgba(15, 23, 42, 0.9);
-            border: 1px solid rgba(148, 163, 184, 0.12);
+            border: 1px solid rgba(148, 163, 184, 0.14);
         }
 
-        .spinner {
-            width: 56px;
-            height: 56px;
-            border: 5px solid rgba(255, 255, 255, 0.14);
-            border-top-color: #60a5fa;
-            border-radius: 50%;
-            animation: spin 1s linear infinite;
-            margin: 0 auto 14px;
+        .hidden {
+            display: none !important;
         }
 
-        .loading div:last-child {
+        .status-top {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 16px;
+            flex-wrap: wrap;
+        }
+
+        .status-label {
+            color: #ffffff;
+            font-weight: 700;
+            font-size: 15px;
+        }
+
+        .status-percent {
+            color: #93c5fd;
+            font-size: 15px;
+            font-weight: 700;
+        }
+
+        .progress-track {
+            width: 100%;
+            height: 12px;
+            border-radius: 999px;
+            background: rgba(255, 255, 255, 0.08);
+            overflow: hidden;
+            border: 1px solid rgba(148, 163, 184, 0.2);
+        }
+
+        .progress-fill {
+            width: 0%;
+            height: 100%;
+            border-radius: 999px;
+            background: linear-gradient(90deg, #2563eb 0%, #7c3aed 100%);
+            transition: width 0.2s ease;
+        }
+
+        .status-description {
             color: #94a3b8;
             font-size: 14px;
-            line-height: 1.65;
+            line-height: 1.6;
+            margin: 0;
         }
 
-        @keyframes spin {
-            to {
-                transform: rotate(360deg);
-            }
+        .download-btn {
+            display: inline-flex;
+            justify-content: center;
+            padding: 14px 24px;
+            border-radius: 16px;
+            background: linear-gradient(135deg, #2563eb 0%, #7c3aed 100%);
+            color: #ffffff;
+            font-weight: 700;
+            text-decoration: none;
+            transition: transform 0.25s ease, box-shadow 0.25s ease;
         }
+
+        .download-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 18px 38px rgba(37, 99, 235, 0.22);
+        }
+
+        @media (max-width: 960px) {
 
         @media (max-width: 960px) {
             .panel {
@@ -549,20 +599,26 @@
                                 <h2>Selected images</h2>
                                 <p>Preview your chosen files before uploading for classification.</p>
                             </div>
-                            <div class="preview-count" id="previewCountMobile">0 files</div>
                         </div>
                         <div class="preview-grid" id="previewGrid"></div>
+                    </div>
+
+                    <div class="status-panel hidden" id="statusPanel">
+                        <div class="status-top">
+                            <span class="status-label" id="statusLabel">Uploading images...</span>
+                            <span class="status-percent" id="statusPercent">0%</span>
+                        </div>
+                        <div class="progress-track">
+                            <div class="progress-fill" id="progressFill"></div>
+                        </div>
+                        <p class="status-description" id="statusDescription">Preparing your upload.</p>
+                        <a class="download-btn hidden" id="downloadBtn" href="#" download="classified_images.zip">Download ZIP</a>
                     </div>
 
                     <div class="actions">
                         <button type="submit" class="upload-btn" id="uploadBtn" disabled>
                             Upload & Download ZIP
                         </button>
-                    </div>
-
-                    <div class="loading" id="loading">
-                        <div class="spinner"></div>
-                        <div>Processing your images and preparing the download package. Please keep this tab open.</div>
                     </div>
                 </form>
             </section>
@@ -575,18 +631,68 @@
         const fileInput = document.getElementById('fileInput');
         const previewGrid = document.getElementById('previewGrid');
         const previewCount = document.getElementById('previewCount');
-        const previewCountMobile = document.getElementById('previewCountMobile');
         const uploadBtn = document.getElementById('uploadBtn');
         const uploadForm = document.getElementById('uploadForm');
-        const loading = document.getElementById('loading');
+        const statusPanel = document.getElementById('statusPanel');
+        const statusLabel = document.getElementById('statusLabel');
+        const statusPercent = document.getElementById('statusPercent');
+        const statusDescription = document.getElementById('statusDescription');
+        const progressFill = document.getElementById('progressFill');
+        const downloadBtn = document.getElementById('downloadBtn');
         const dropArea = document.getElementById('dropArea');
         let selectedFiles = [];
+        let zipBlobUrl = null;
 
         function updateCounts() {
             const count = selectedFiles.length;
             const label = count === 1 ? '1 file ready' : `${count} files ready`;
             previewCount.textContent = label;
-            previewCountMobile.textContent = count === 1 ? '1 file' : `${count} files`;
+        }
+
+        function setProgress(percent, label, description) {
+            progressFill.style.width = `${percent}%`;
+            statusPercent.textContent = `${percent}%`;
+            statusLabel.textContent = label;
+            statusDescription.textContent = description;
+        }
+
+        function resetStatus() {
+            statusPanel.classList.add('hidden');
+            downloadBtn.classList.add('hidden');
+            setProgress(0, 'Uploading images...', 'Preparing your upload.');
+            if (zipBlobUrl) {
+                URL.revokeObjectURL(zipBlobUrl);
+                zipBlobUrl = null;
+            }
+        }
+
+        function resetForm() {
+            selectedFiles = [];
+            fileInput.value = '';
+            previewGrid.innerHTML = '';
+            uploadBtn.disabled = true;
+            updateCounts();
+            resetStatus();
+        }
+
+        function renderPreview() {
+            previewGrid.innerHTML = '';
+            uploadBtn.disabled = selectedFiles.length === 0;
+            updateCounts();
+
+            selectedFiles.forEach(file => {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    const card = document.createElement('div');
+                    card.className = 'preview-card';
+                    card.innerHTML = `
+                        <img src="${e.target.result}" alt="${file.name}">
+                        <div class="preview-name">${file.name}</div>
+                    `;
+                    previewGrid.appendChild(card);
+                };
+                reader.readAsDataURL(file);
+            });
         }
 
         fileInput.addEventListener('change', (event) => {
@@ -615,30 +721,66 @@
             renderPreview();
         });
 
-        function renderPreview() {
-            previewGrid.innerHTML = '';
-            uploadBtn.disabled = selectedFiles.length === 0;
-            updateCounts();
+        uploadForm.addEventListener('submit', (event) => {
+            event.preventDefault();
+            if (selectedFiles.length === 0) {
+                return;
+            }
 
-            selectedFiles.forEach(file => {
-                const reader = new FileReader();
-                reader.onload = function(e) {
-                    const card = document.createElement('div');
-                    card.className = 'preview-card';
-                    card.innerHTML = `
-                        <img src="${e.target.result}" alt="${file.name}">
-                        <div class="preview-name">${file.name}</div>
-                    `;
-                    previewGrid.appendChild(card);
-                };
-                reader.readAsDataURL(file);
-            });
-        }
-
-        uploadForm.addEventListener('submit', () => {
-            loading.style.display = 'block';
             uploadBtn.disabled = true;
+            statusPanel.classList.remove('hidden');
+            downloadBtn.classList.add('hidden');
+            setProgress(0, 'Uploading images...', 'Sending files to server...');
+
+            const formData = new FormData();
+            selectedFiles.forEach((file) => {
+                formData.append('files', file);
+            });
+
+            const xhr = new XMLHttpRequest();
+            xhr.open('POST', '/upload');
+            xhr.responseType = 'blob';
+
+            xhr.upload.onprogress = (e) => {
+                if (e.lengthComputable) {
+                    const percent = Math.min(80, Math.round((e.loaded / e.total) * 80));
+                    setProgress(percent, 'Uploading images...', 'Sending files to server...');
+                }
+            };
+
+            xhr.onreadystatechange = () => {
+                if (xhr.readyState === 2) {
+                    setProgress(85, 'Processing separation...', 'Classification is in progress on the server...');
+                }
+            };
+
+            xhr.onload = () => {
+                if (xhr.status === 200) {
+                    const blob = xhr.response;
+                    zipBlobUrl = URL.createObjectURL(blob);
+                    downloadBtn.href = zipBlobUrl;
+                    statusPanel.classList.remove('hidden');
+                    setProgress(100, 'Separation Completed', 'Your ZIP file is ready for download.');
+                    downloadBtn.classList.remove('hidden');
+                } else {
+                    setProgress(0, 'Upload failed', 'Server returned an error. Please try again.');
+                }
+            };
+
+            xhr.onerror = () => {
+                setProgress(0, 'Upload failed', 'Network error. Please try again.');
+            };
+
+            xhr.send(formData);
         });
+
+        downloadBtn.addEventListener('click', () => {
+            setTimeout(() => {
+                resetForm();
+            }, 600);
+        });
+
+        resetStatus();
 
     </script>
 
