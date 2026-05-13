@@ -338,16 +338,6 @@
             font-size: 14px;
         }
 
-        .preview-count {
-            color: #ffffff;
-            font-size: 14px;
-            font-weight: 600;
-            background: rgba(30, 41, 59, 0.9);
-            border-radius: 999px;
-            padding: 10px 16px;
-            border: 1px solid rgba(148, 163, 184, 0.12);
-        }
-
         .preview-grid {
             display: grid;
             grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
@@ -582,7 +572,6 @@
                         <h2>Upload images</h2>
                         <p>Select one or more photos and let the classifier do the rest. The download button is enabled only after images are ready for ZIP export.</p>
                     </div>
-                    <div class="preview-count" id="previewCount">0 files ready</div>
                 </div>
 
                 <form id="uploadForm" action="/upload" method="post" enctype="multipart/form-data">
@@ -617,7 +606,7 @@
 
                     <div class="actions">
                         <button type="submit" class="upload-btn" id="uploadBtn" disabled>
-                            Upload & Download ZIP
+                            Upload Images
                         </button>
                     </div>
                 </form>
@@ -630,7 +619,6 @@
 
         const fileInput = document.getElementById('fileInput');
         const previewGrid = document.getElementById('previewGrid');
-        const previewCount = document.getElementById('previewCount');
         const uploadBtn = document.getElementById('uploadBtn');
         const uploadForm = document.getElementById('uploadForm');
         const statusPanel = document.getElementById('statusPanel');
@@ -643,12 +631,6 @@
         let selectedFiles = [];
         let zipBlobUrl = null;
 
-        function updateCounts() {
-            const count = selectedFiles.length;
-            const label = count === 1 ? '1 file ready' : `${count} files ready`;
-            previewCount.textContent = label;
-        }
-
         function setProgress(percent, label, description) {
             progressFill.style.width = `${percent}%`;
             statusPercent.textContent = `${percent}%`;
@@ -659,6 +641,7 @@
         function resetStatus() {
             statusPanel.classList.add('hidden');
             downloadBtn.classList.add('hidden');
+            uploadBtn.style.display = 'inline-flex';
             setProgress(0, 'Uploading images...', 'Preparing your upload.');
             if (zipBlobUrl) {
                 URL.revokeObjectURL(zipBlobUrl);
@@ -671,14 +654,13 @@
             fileInput.value = '';
             previewGrid.innerHTML = '';
             uploadBtn.disabled = true;
-            updateCounts();
+            uploadBtn.style.display = 'inline-flex';
             resetStatus();
         }
 
         function renderPreview() {
             previewGrid.innerHTML = '';
             uploadBtn.disabled = selectedFiles.length === 0;
-            updateCounts();
 
             selectedFiles.forEach(file => {
                 const reader = new FileReader();
@@ -728,6 +710,7 @@
             }
 
             uploadBtn.disabled = true;
+            uploadBtn.style.display = 'none';
             statusPanel.classList.remove('hidden');
             downloadBtn.classList.add('hidden');
             setProgress(0, 'Uploading images...', 'Sending files to server...');
