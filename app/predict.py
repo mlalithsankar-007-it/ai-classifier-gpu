@@ -1,12 +1,51 @@
-import tensorflow as tf
-import numpy as np
-from PIL import Image
 import os
 import shutil
+import boto3
+import tensorflow as tf
+import numpy as np
 
-MODEL_PATH = "app/model/interior_exterior_classifier.h5"
+from PIL import Image
 
-model = tf.keras.models.load_model(MODEL_PATH)
+
+MINIO_ENDPOINT = os.getenv("MINIO_ENDPOINT")
+MINIO_ACCESS_KEY = os.getenv("MINIO_ACCESS_KEY")
+MINIO_SECRET_KEY = os.getenv("MINIO_SECRET_KEY")
+
+MODEL_BUCKET = os.getenv("MODEL_BUCKET", "models")
+MODEL_OBJECT = os.getenv(
+    "MODEL_OBJECT",
+    "classifier/v1/interior_exterior_classifier.h5"
+)
+
+LOCAL_MODEL_PATH = "/tmp/model.h5"
+
+
+def download_model():
+
+    if os.path.exists(LOCAL_MODEL_PATH):
+        return
+
+    s3 = boto3.client(
+        "s3",
+        endpoint_url=MINIO_ENDPOINT,
+        aws_access_key_id=MINIO_ACCESS_KEY,
+        aws_secret_access_key=MINIO_SECRET_KEY
+    )
+
+    print("Downloading model from MinIO...")
+
+    s3.download_file(
+        MODEL_BUCKET,
+        MODEL_OBJECT,
+        LOCAL_MODEL_PATH
+    )
+
+    print("Model downloaded successfully")
+
+
+download_model()
+
+model = tf.keras.models.load_model(LOCAL_MODEL_PATH)
 
 
 def classify_and_organize(files, output_dir):
@@ -48,4 +87,5 @@ def classify_and_organize(files, output_dir):
                 )
 
         except Exception as e:
+
             print(f"Error processing {file_path}: {e}")
