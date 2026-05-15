@@ -45,7 +45,13 @@ def download_model():
 
 download_model()
 
-model = tf.keras.models.load_model(LOCAL_MODEL_PATH)
+print("GPU DEVICES:")
+print(tf.config.list_physical_devices('GPU'))
+
+model = tf.keras.models.load_model(
+    LOCAL_MODEL_PATH,
+    compile=False
+)
 
 
 def classify_and_organize(files, output_dir):
