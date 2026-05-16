@@ -1,4 +1,4 @@
-FROM docker.io/nvidia/cuda:12.4.1-cudnn-runtime-ubuntu22.04
+FROM docker.io/nvidia/cuda:12.5.0-cudnn-runtime-ubuntu22.04
 
 ENV DEBIAN_FRONTEND=noninteractive
 
