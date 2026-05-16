@@ -20,23 +20,47 @@ MODEL_OBJECT = os.getenv(
 
 LOCAL_MODEL_PATH = "/tmp/model.h5"
 USE_GPU = os.getenv("USE_GPU", "true").lower() in {"1", "true", "yes"}
+
 MODEL = None
 
 
 def _configure_environment():
+    os.environ.setdefault("TF_CPP_MIN_LOG_LEVEL", "2")
+
     if not USE_GPU:
         os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
-    os.environ.setdefault("TF_CPP_MIN_LOG_LEVEL", "2")
+        print("GPU disabled manually.")
+        return
+
+    gpus = tf.config.list_physical_devices("GPU")
+
+    if gpus:
+        print(f"Detected GPUs: {gpus}")
+
+        try:
+            for gpu in gpus:
+                tf.config.experimental.set_memory_growth(gpu, True)
+
+            print("TensorFlow GPU memory growth enabled.")
+
+        except Exception as e:
+            print(f"Error configuring GPU memory growth: {e}")
+
+    else:
+        print("No GPU detected. Falling back to CPU.")
 
 
 def download_model():
     if os.path.exists(LOCAL_MODEL_PATH):
+        print("Model already exists locally.")
         return
 
     if not MINIO_ENDPOINT or not MINIO_ACCESS_KEY or not MINIO_SECRET_KEY:
         raise RuntimeError(
             "Missing MinIO credentials: MINIO_ENDPOINT, MINIO_ACCESS_KEY, and MINIO_SECRET_KEY must be set."
         )
+
+    print("Connecting to MinIO...")
 
     s3 = boto3.client(
         "s3",
@@ -47,7 +71,7 @@ def download_model():
 
     print("Downloading model from MinIO...")
     s3.download_file(MODEL_BUCKET, MODEL_OBJECT, LOCAL_MODEL_PATH)
-    print("Model downloaded successfully")
+    print("Model downloaded successfully.")
 
 
 class LegacyInputLayer(tf.keras.layers.InputLayer):
@@ -59,24 +83,26 @@ class LegacyInputLayer(tf.keras.layers.InputLayer):
 
 def load_model_if_needed():
     global MODEL
+
     if MODEL is not None:
         return MODEL
 
     _configure_environment()
+
     download_model()
 
-    if USE_GPU:
-        print("GPU DEVICES:")
-        print(tf.config.list_physical_devices("GPU"))
-    else:
-        print("GPU disabled, running on CPU.")
+    print("Loading TensorFlow model...")
 
     MODEL = tf.keras.models.load_model(
         LOCAL_MODEL_PATH,
         compile=False,
-        custom_objects={"InputLayer": LegacyInputLayer}
+        custom_objects={
+            "InputLayer": LegacyInputLayer
+        }
     )
+
     print("Model loaded successfully.")
+
     return MODEL
 
 
@@ -90,21 +116,39 @@ def classify_and_organize(files, output_dir):
     os.makedirs(exterior_dir, exist_ok=True)
 
     print(f"Classifying {len(files)} files...")
+
     for file_path in files:
         try:
             img = Image.open(file_path).convert("RGB")
+
             img = img.resize((224, 224))
+
             img_array = np.array(img, dtype=np.float32) / 255.0
+
             img_array = np.expand_dims(img_array, axis=0)
 
-            prediction = model.predict(img_array)
-            print(f"Prediction raw output for {os.path.basename(file_path)}: {prediction}")
+            prediction = model.predict(img_array, verbose=0)
+
             prediction_value = float(prediction[0][0])
+
             filename = os.path.basename(file_path)
 
-            target_dir = interior_dir if prediction_value > 0.5 else exterior_dir
-            shutil.copy(file_path, os.path.join(target_dir, filename))
+            print(
+                f"{filename} -> prediction={prediction_value}"
+            )
+
+            target_dir = (
+                interior_dir
+                if prediction_value > 0.5
+                else exterior_dir
+            )
+
+            shutil.copy(
+                file_path,
+                os.path.join(target_dir, filename)
+            )
 
         except Exception as e:
             print(f"Error processing {file_path}: {e}")
+
             traceback.print_exc()
