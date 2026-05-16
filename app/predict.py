@@ -1,5 +1,6 @@
 import os
 import shutil
+import traceback
 import boto3
 import tensorflow as tf
 import numpy as np
@@ -49,6 +50,13 @@ def download_model():
     print("Model downloaded successfully")
 
 
+class LegacyInputLayer(tf.keras.layers.InputLayer):
+    def __init__(self, *args, batch_shape=None, **kwargs):
+        if batch_shape is not None:
+            kwargs["batch_input_shape"] = batch_shape
+        super().__init__(*args, **kwargs)
+
+
 def load_model_if_needed():
     global MODEL
     if MODEL is not None:
@@ -63,7 +71,11 @@ def load_model_if_needed():
     else:
         print("GPU disabled, running on CPU.")
 
-    MODEL = tf.keras.models.load_model(LOCAL_MODEL_PATH, compile=False)
+    MODEL = tf.keras.models.load_model(
+        LOCAL_MODEL_PATH,
+        compile=False,
+        custom_objects={"InputLayer": LegacyInputLayer}
+    )
     print("Model loaded successfully.")
     return MODEL
 
@@ -77,6 +89,7 @@ def classify_and_organize(files, output_dir):
     os.makedirs(interior_dir, exist_ok=True)
     os.makedirs(exterior_dir, exist_ok=True)
 
+    print(f"Classifying {len(files)} files...")
     for file_path in files:
         try:
             img = Image.open(file_path).convert("RGB")
@@ -84,11 +97,14 @@ def classify_and_organize(files, output_dir):
             img_array = np.array(img, dtype=np.float32) / 255.0
             img_array = np.expand_dims(img_array, axis=0)
 
-            prediction = model.predict(img_array)[0][0]
+            prediction = model.predict(img_array)
+            print(f"Prediction raw output for {os.path.basename(file_path)}: {prediction}")
+            prediction_value = float(prediction[0][0])
             filename = os.path.basename(file_path)
 
-            target_dir = interior_dir if prediction > 0.5 else exterior_dir
+            target_dir = interior_dir if prediction_value > 0.5 else exterior_dir
             shutil.copy(file_path, os.path.join(target_dir, filename))
 
         except Exception as e:
             print(f"Error processing {file_path}: {e}")
+            traceback.print_exc()

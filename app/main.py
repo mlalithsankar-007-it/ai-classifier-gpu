@@ -7,6 +7,7 @@ from starlette.background import BackgroundTask
 from typing import List
 
 import os
+import traceback
 import uuid
 import shutil
 import zipfile
@@ -79,10 +80,15 @@ async def upload_images(
 
         saved_files.append(file_path)
 
-    classify_and_organize(
-        saved_files,
-        output_dir
-    )
+    try:
+        classify_and_organize(
+            saved_files,
+            output_dir
+        )
+    except Exception as exc:
+        print("Error in upload_images endpoint:")
+        traceback.print_exc()
+        raise
 
     zip_path = f"{output_dir}.zip"
 
