@@ -1,0 +1,42 @@
+name: Build and Push Image
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  build-and-push:
+    runs-on: self-hosted
+
+    env:
+      NEXUS_REGISTRY: 192.168.1.52:8082
+      IMAGE_NAME: ai-classifier-gpu
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Login to Nexus
+        run: |
+          echo "${{ secrets.NEXUS_PASSWORD }}" | \
+          docker login "$NEXUS_REGISTRY" \
+            --username "${{ secrets.NEXUS_USERNAME }}" \
+            --password-stdin
+
+      - name: Build Docker image
+        run: |
+          docker build \
+            -t "$NEXUS_REGISTRY/$IMAGE_NAME:${{ github.sha }}" \
+            -t "$NEXUS_REGISTRY/$IMAGE_NAME:latest" \
+            .
+
+      - name: Push image to Nexus
+        run: |
+          docker push "$NEXUS_REGISTRY/$IMAGE_NAME:${{ github.sha }}"
+          docker push "$NEXUS_REGISTRY/$IMAGE_NAME:latest"
+
+      - name: Logout from Nexus
+        if: always()
+        run: |
+          docker logout "$NEXUS_REGISTRY"
