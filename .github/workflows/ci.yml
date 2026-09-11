@@ -10,7 +10,7 @@ jobs:
     runs-on: self-hosted
 
     env:
-      NEXUS_REGISTRY: http://192.168.1.52:8082
+      NEXUS_REGISTRY: 192.168.1.52:8082
       IMAGE_NAME: ai-classifier-gpu
 
     steps:
