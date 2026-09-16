@@ -7,43 +7,39 @@ on:
 
 jobs:
   build-and-push:
-    runs-on: self-hosted
+    runs-on: ocp-ai-runner
 
     env:
-      NEXUS_REGISTRY: 192.168.1.52:8082
+      NEXUS_REGISTRY: 192.168.1.52:8084
       IMAGE_NAME: ai-classifier-gpu
 
     steps:
-      - name: Cleanup Runner Diagnostics Before Build
-        run: |
-          echo "=== Cleaning old runner data ==="
-          rm -rf ${{ github.workspace }}/../_diag/*
-          
       - name: Checkout code
         uses: actions/checkout@v4
 
       - name: Login to Nexus
         run: |
           echo "${{ secrets.NEXUS_PASSWORD }}" | \
-          docker login "$NEXUS_REGISTRY" \
+          buildah login "$NEXUS_REGISTRY" \
             --username "${{ secrets.NEXUS_USERNAME }}" \
             --password-stdin
 
-      - name: Build Docker image
+      - name: Build image
         run: |
-          # --load safely exports the built image to your local docker images list
-          docker buildx build \
-            --load \
+          buildah bud \
             -t "$NEXUS_REGISTRY/$IMAGE_NAME:${{ github.sha }}" \
             -t "$NEXUS_REGISTRY/$IMAGE_NAME:latest" \
             .
 
       - name: Push image to Nexus
         run: |
-          docker push "$NEXUS_REGISTRY/$IMAGE_NAME:${{ github.sha }}"
-          docker push "$NEXUS_REGISTRY/$IMAGE_NAME:latest"
+          buildah push \
+            "$NEXUS_REGISTRY/$IMAGE_NAME:${{ github.sha }}"
+
+          buildah push \
+            "$NEXUS_REGISTRY/$IMAGE_NAME:latest"
 
       - name: Logout from Nexus
         if: always()
         run: |
-          docker logout "$NEXUS_REGISTRY"
+          buildah logout "$NEXUS_REGISTRY"
