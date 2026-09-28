@@ -621,7 +621,7 @@
                 <span class="brand-subtitle">technologies</span>
             </div>
             <div class="topbar-copy">
-                <h1>Dark, polished image upload flow for quick classification.</h1>
+                <h1>Image classification, now connected to MinIO.</h1>
                 <p>
                     Upload multiple photos, let the AI sort interior vs exterior, and download the results as a ZIP file once classification completes.
                 </p>
@@ -732,6 +732,7 @@
         const interiorGrid = document.getElementById('interiorGrid');
         let selectedFiles = [];
         let previewSessionId = null;
+        let downloadInProgress = false;
 
         function setProgress(percent, label, description) {
             progressFill.style.width = `${percent}%`;
@@ -896,10 +897,56 @@
             xhr.send(formData);
         });
 
-        downloadBtn.addEventListener('click', () => {
-            setTimeout(() => {
-                resetForm();
-            }, 600);
+        downloadBtn.addEventListener('click', async (event) => {
+            event.preventDefault();
+            if (downloadInProgress || !previewSessionId) {
+                return;
+            }
+
+            downloadInProgress = true;
+            const sessionId = previewSessionId;
+            let downloadReceived = false;
+            downloadBtn.setAttribute('aria-disabled', 'true');
+            setProgress(100, 'Preparing download...', 'Waiting for the ZIP transfer to finish.');
+
+            try {
+                const response = await fetch(downloadBtn.href);
+                if (!response.ok) {
+                    throw new Error(`ZIP request failed with status ${response.status}`);
+                }
+
+                const blob = await response.blob();
+                const objectUrl = URL.createObjectURL(blob);
+                const link = document.createElement('a');
+                link.href = objectUrl;
+                link.download = 'classified_images.zip';
+                document.body.appendChild(link);
+                link.click();
+                link.remove();
+                window.setTimeout(() => URL.revokeObjectURL(objectUrl), 60000);
+                downloadReceived = true;
+
+                setProgress(100, 'Download received', 'Cleaning up the completed session.');
+                const cleanupResponse = await fetch(`/download/${encodeURIComponent(sessionId)}/complete`, {
+                    method: 'POST'
+                });
+                if (!cleanupResponse.ok) {
+                    throw new Error(`Session cleanup failed with status ${cleanupResponse.status}`);
+                }
+
+                downloadBtn.classList.add('hidden');
+                window.setTimeout(resetForm, 600);
+            } catch (error) {
+                console.error(error);
+                if (downloadReceived) {
+                    setProgress(100, 'Download received', 'MinIO cleanup could not be confirmed. Check the bucket lifecycle policy.');
+                } else {
+                    setProgress(0, 'Download failed', 'Your files are still available. Please retry the download.');
+                }
+            } finally {
+                downloadInProgress = false;
+                downloadBtn.removeAttribute('aria-disabled');
+            }
         });
 
         resetStatus();

@@ -24,6 +24,20 @@ USE_GPU = os.getenv("USE_GPU", "true").lower() in {"1", "true", "yes"}
 MODEL = None
 
 
+def create_minio_client():
+    if not MINIO_ENDPOINT or not MINIO_ACCESS_KEY or not MINIO_SECRET_KEY:
+        raise RuntimeError(
+            "Missing MinIO credentials: MINIO_ENDPOINT, MINIO_ACCESS_KEY, and MINIO_SECRET_KEY must be set."
+        )
+
+    return boto3.client(
+        "s3",
+        endpoint_url=MINIO_ENDPOINT,
+        aws_access_key_id=MINIO_ACCESS_KEY,
+        aws_secret_access_key=MINIO_SECRET_KEY,
+    )
+
+
 def _configure_environment():
     os.environ.setdefault("TF_CPP_MIN_LOG_LEVEL", "2")
 
@@ -55,19 +69,9 @@ def download_model():
         print("Model already exists locally.")
         return
 
-    if not MINIO_ENDPOINT or not MINIO_ACCESS_KEY or not MINIO_SECRET_KEY:
-        raise RuntimeError(
-            "Missing MinIO credentials: MINIO_ENDPOINT, MINIO_ACCESS_KEY, and MINIO_SECRET_KEY must be set."
-        )
-
     print("Connecting to MinIO...")
 
-    s3 = boto3.client(
-        "s3",
-        endpoint_url=MINIO_ENDPOINT,
-        aws_access_key_id=MINIO_ACCESS_KEY,
-        aws_secret_access_key=MINIO_SECRET_KEY
-    )
+    s3 = create_minio_client()
 
     print("Downloading model from MinIO...")
     s3.download_file(MODEL_BUCKET, MODEL_OBJECT, LOCAL_MODEL_PATH)
