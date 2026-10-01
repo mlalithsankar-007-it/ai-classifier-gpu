@@ -1,11 +1,12 @@
-from fastapi import FastAPI, UploadFile, File, Request, HTTPException
-from fastapi.responses import HTMLResponse, StreamingResponse
+from fastapi import FastAPI, UploadFile, File, Request, HTTPException, BackgroundTasks
+from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
 from fastapi.templating import Jinja2Templates
 
 from typing import List
 
 from functools import lru_cache
 import mimetypes
+import json
 import os
 import tempfile
 import traceback
@@ -82,22 +83,100 @@ def stream_object(body):
         body.close()
 
 
-@app.post("/upload")
-async def upload_images(
-    files: List[UploadFile] = File(...)
-):
+def save_session_status(s3, session_id: str, status: dict):
+    s3.put_object(
+        Bucket=SESSION_BUCKET,
+        Key=session_object_key(session_id, "status.json"),
+        Body=json.dumps(status).encode("utf-8"),
+        ContentType="application/json",
+    )
 
-    session_id = str(uuid.uuid4())
+
+def process_session(session_id: str, uploaded_files: list):
     base_dir = tempfile.mkdtemp(prefix=f"{session_id}-")
     upload_dir = os.path.join(base_dir, "uploads")
     output_dir = os.path.join(base_dir, "classified")
     zip_path = f"{output_dir}.zip"
+
+    try:
+        s3 = create_minio_client()
+        os.makedirs(upload_dir, exist_ok=True)
+        saved_files = []
+
+        for item in uploaded_files:
+            file_path = os.path.join(upload_dir, item["filename"])
+            s3.download_file(SESSION_BUCKET, item["key"], file_path)
+            saved_files.append(file_path)
+
+        classify_and_organize(saved_files, output_dir)
+
+        exterior_dir = os.path.join(output_dir, "exterior")
+        interior_dir = os.path.join(output_dir, "interior")
+        exterior_files = sorted(os.listdir(exterior_dir))
+        interior_files = sorted(os.listdir(interior_dir))
+
+        with zipfile.ZipFile(
+            zip_path,
+            "w",
+            compression=zipfile.ZIP_STORED,
+        ) as zipf:
+            for root, _, local_files in os.walk(output_dir):
+                for filename in local_files:
+                    file_path = os.path.join(root, filename)
+                    zipf.write(file_path, os.path.relpath(file_path, output_dir))
+
+        for category, filenames in (
+            ("exterior", exterior_files),
+            ("interior", interior_files),
+        ):
+            for filename in filenames:
+                s3.upload_file(
+                    os.path.join(output_dir, category, filename),
+                    SESSION_BUCKET,
+                    session_object_key(session_id, category, filename),
+                )
+
+        s3.upload_file(
+            zip_path,
+            SESSION_BUCKET,
+            session_object_key(session_id, "classified_images.zip"),
+        )
+        save_session_status(
+            s3,
+            session_id,
+            {
+                "state": "complete",
+                "exterior": exterior_files,
+                "interior": interior_files,
+            },
+        )
+    except Exception:
+        print(f"Error processing session {session_id}:")
+        traceback.print_exc()
+        try:
+            save_session_status(
+                create_minio_client(),
+                session_id,
+                {"state": "failed", "detail": "Image processing failed. Please upload again."},
+            )
+        except Exception:
+            traceback.print_exc()
+    finally:
+        shutil.rmtree(base_dir, ignore_errors=True)
+
+
+@app.post("/upload")
+async def upload_images(
+    background_tasks: BackgroundTasks,
+    files: List[UploadFile] = File(...)
+):
+
+    session_id = str(uuid.uuid4())
     s3 = None
 
-    os.makedirs(upload_dir, exist_ok=True)
     try:
         s3 = get_minio_client()
-        saved_files = []
+        uploaded_files = []
         used_names = set()
 
         for index, file in enumerate(files):
@@ -119,48 +198,10 @@ async def upload_images(
                 f"{index:06d}_{unique_name}",
             )
             s3.upload_fileobj(file.file, SESSION_BUCKET, object_key)
+            uploaded_files.append({"key": object_key, "filename": unique_name})
 
-            file_path = os.path.join(upload_dir, unique_name)
-            s3.download_file(SESSION_BUCKET, object_key, file_path)
-            saved_files.append(file_path)
-
-        classify_and_organize(
-            saved_files,
-            output_dir
-        )
-
-        exterior_dir = os.path.join(output_dir, "exterior")
-        interior_dir = os.path.join(output_dir, "interior")
-        exterior_files = sorted(os.listdir(exterior_dir))
-        interior_files = sorted(os.listdir(interior_dir))
-
-        with zipfile.ZipFile(
-            zip_path,
-            "w",
-            compression=zipfile.ZIP_STORED,
-        ) as zipf:
-            for root, _, local_files in os.walk(output_dir):
-                for filename in local_files:
-                    file_path = os.path.join(root, filename)
-                    arcname = os.path.relpath(file_path, output_dir)
-                    zipf.write(file_path, arcname)
-
-        for category, filenames in (
-            ("exterior", exterior_files),
-            ("interior", interior_files),
-        ):
-            for filename in filenames:
-                s3.upload_file(
-                    os.path.join(output_dir, category, filename),
-                    SESSION_BUCKET,
-                    session_object_key(session_id, category, filename),
-                )
-
-        s3.upload_file(
-            zip_path,
-            SESSION_BUCKET,
-            session_object_key(session_id, "classified_images.zip"),
-        )
+        save_session_status(s3, session_id, {"state": "processing"})
+        background_tasks.add_task(process_session, session_id, uploaded_files)
 
     except HTTPException:
         if s3 is not None:
@@ -178,15 +219,34 @@ async def upload_images(
             except Exception:
                 traceback.print_exc()
         raise HTTPException(status_code=500, detail="Image processing failed") from exc
-    finally:
-        shutil.rmtree(base_dir, ignore_errors=True)
+    return JSONResponse(
+        status_code=202,
+        content={
+            "session_id": session_id,
+            "status_url": f"/status/{session_id}",
+            "download_url": f"/download/{session_id}",
+        },
+    )
 
-    return {
-        "session_id": session_id,
-        "exterior": exterior_files,
-        "interior": interior_files,
-        "download_url": f"/download/{session_id}"
-    }
+
+@app.get("/status/{session_id}")
+async def session_status(session_id: str):
+    session_id = get_session_id(session_id)
+    s3 = get_minio_client()
+    try:
+        result = s3.get_object(
+            Bucket=SESSION_BUCKET,
+            Key=session_object_key(session_id, "status.json"),
+        )
+        body = result["Body"]
+        try:
+            return json.loads(body.read().decode("utf-8"))
+        finally:
+            body.close()
+    except ClientError as exc:
+        if exc.response.get("Error", {}).get("Code") in {"NoSuchKey", "404", "NotFound"}:
+            raise HTTPException(status_code=404, detail="Session not found") from exc
+        raise
 
 
 @app.get("/preview/{session_id}/{category}/{filename}")

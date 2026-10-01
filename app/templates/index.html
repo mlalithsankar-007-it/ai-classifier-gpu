@@ -425,6 +425,12 @@
             gap: 16px;
         }
 
+        .preview-summary {
+            margin: 0;
+            color: #94a3b8;
+            font-size: 13px;
+        }
+
         .preview-card {
             background: rgba(15, 23, 42, 0.95);
             border-radius: 20px;
@@ -676,6 +682,7 @@
                             </div>
                         </div>
                         <div class="preview-grid" id="previewGrid"></div>
+                        <p class="preview-summary" id="previewSummary" aria-live="polite"></p>
                     </div>
 
                     <div class="classification-result hidden" id="classificationResult">
@@ -683,10 +690,12 @@
                             <div class="result-column">
                                 <h3>Exterior images</h3>
                                 <div class="result-grid" id="exteriorGrid"></div>
+                                <p class="preview-summary" id="exteriorSummary"></p>
                             </div>
                             <div class="result-column">
                                 <h3>Interior images</h3>
                                 <div class="result-grid" id="interiorGrid"></div>
+                                <p class="preview-summary" id="interiorSummary"></p>
                             </div>
                         </div>
                     </div>
@@ -718,6 +727,7 @@
 
         const fileInput = document.getElementById('fileInput');
         const previewGrid = document.getElementById('previewGrid');
+        const previewSummary = document.getElementById('previewSummary');
         const uploadBtn = document.getElementById('uploadBtn');
         const uploadForm = document.getElementById('uploadForm');
         const statusPanel = document.getElementById('statusPanel');
@@ -730,7 +740,11 @@
         const classificationResult = document.getElementById('classificationResult');
         const exteriorGrid = document.getElementById('exteriorGrid');
         const interiorGrid = document.getElementById('interiorGrid');
+        const exteriorSummary = document.getElementById('exteriorSummary');
+        const interiorSummary = document.getElementById('interiorSummary');
+        const PREVIEW_LIMIT = 6;
         let selectedFiles = [];
+        let selectedPreviewUrls = [];
         let previewSessionId = null;
         let downloadInProgress = false;
 
@@ -747,14 +761,23 @@
             classificationResult.classList.add('hidden');
             exteriorGrid.innerHTML = '';
             interiorGrid.innerHTML = '';
+            exteriorSummary.textContent = '';
+            interiorSummary.textContent = '';
             setProgress(0, 'Uploading images...', 'Preparing your upload.');
+        }
+
+        function clearSelectedPreviews() {
+            selectedPreviewUrls.forEach((url) => URL.revokeObjectURL(url));
+            selectedPreviewUrls = [];
+            previewGrid.replaceChildren();
+            previewSummary.textContent = '';
         }
 
         function resetForm() {
             selectedFiles = [];
             previewSessionId = null;
             fileInput.value = '';
-            previewGrid.innerHTML = '';
+            clearSelectedPreviews();
             classificationResult.classList.add('hidden');
             exteriorGrid.innerHTML = '';
             interiorGrid.innerHTML = '';
@@ -764,56 +787,94 @@
         }
 
         function renderPreview() {
-            previewGrid.innerHTML = '';
+            clearSelectedPreviews();
             uploadBtn.disabled = selectedFiles.length === 0;
 
-            selectedFiles.forEach(file => {
-                const reader = new FileReader();
-                reader.onload = function(e) {
-                    const card = document.createElement('div');
-                    card.className = 'preview-card';
-                    card.innerHTML = `
-                        <img src="${e.target.result}" alt="${file.name}">
-                        <div class="preview-name">${file.name}</div>
-                    `;
-                    previewGrid.appendChild(card);
-                };
-                reader.readAsDataURL(file);
+            selectedFiles.slice(0, PREVIEW_LIMIT).forEach((file) => {
+                const objectUrl = URL.createObjectURL(file);
+                selectedPreviewUrls.push(objectUrl);
+
+                const card = document.createElement('div');
+                card.className = 'preview-card';
+                const image = document.createElement('img');
+                image.src = objectUrl;
+                image.alt = file.name;
+                const name = document.createElement('div');
+                name.className = 'preview-name';
+                name.textContent = file.name;
+                card.append(image, name);
+                previewGrid.appendChild(card);
             });
+
+            const remaining = selectedFiles.length - PREVIEW_LIMIT;
+            previewSummary.textContent = remaining > 0
+                ? `Showing ${PREVIEW_LIMIT} of ${selectedFiles.length} selected images; +${remaining} more.`
+                : `${selectedFiles.length} image${selectedFiles.length === 1 ? '' : 's'} selected.`;
+        }
+
+        function renderResultCategory(grid, summary, category, filenames, sessionId) {
+            grid.replaceChildren();
+            filenames.slice(0, PREVIEW_LIMIT).forEach((filename) => {
+                const card = document.createElement('div');
+                card.className = 'result-card';
+                const image = document.createElement('img');
+                image.loading = 'lazy';
+                image.src = `/preview/${encodeURIComponent(sessionId)}/${category}/${encodeURIComponent(filename)}`;
+                image.alt = filename;
+                const name = document.createElement('span');
+                name.textContent = filename;
+                card.append(image, name);
+                grid.appendChild(card);
+            });
+
+            const remaining = filenames.length - PREVIEW_LIMIT;
+            summary.textContent = remaining > 0
+                ? `Showing ${PREVIEW_LIMIT} of ${filenames.length}; +${remaining} more.`
+                : `${filenames.length} ${category} image${filenames.length === 1 ? '' : 's'}.`;
         }
 
         function renderClassificationPreview(data) {
             previewSessionId = data.session_id;
             classificationResult.classList.remove('hidden');
-            exteriorGrid.innerHTML = '';
-            interiorGrid.innerHTML = '';
+            renderResultCategory(exteriorGrid, exteriorSummary, 'exterior', data.exterior, data.session_id);
+            renderResultCategory(interiorGrid, interiorSummary, 'interior', data.interior, data.session_id);
+        }
 
-            if (data.exterior.length === 0) {
-                exteriorGrid.innerHTML = '<div class="empty-state">No exterior images were detected.</div>';
-            } else {
-                data.exterior.forEach((filename) => {
-                    const card = document.createElement('div');
-                    card.className = 'result-card';
-                    card.innerHTML = `
-                        <img src="/preview/${encodeURIComponent(data.session_id)}/exterior/${encodeURIComponent(filename)}" alt="${filename}">
-                        <span>${filename}</span>
-                    `;
-                    exteriorGrid.appendChild(card);
-                });
-            }
+        async function pollSessionStatus(sessionId, statusUrl, downloadUrl, totalImages) {
+            while (true) {
+                try {
+                    const response = await fetch(statusUrl, { cache: 'no-store' });
+                    if (!response.ok) {
+                        throw new Error(`Status request failed with status ${response.status}`);
+                    }
 
-            if (data.interior.length === 0) {
-                interiorGrid.innerHTML = '<div class="empty-state">No interior images were detected.</div>';
-            } else {
-                data.interior.forEach((filename) => {
-                    const card = document.createElement('div');
-                    card.className = 'result-card';
-                    card.innerHTML = `
-                        <img src="/preview/${encodeURIComponent(data.session_id)}/interior/${encodeURIComponent(filename)}" alt="${filename}">
-                        <span>${filename}</span>
-                    `;
-                    interiorGrid.appendChild(card);
-                });
+                    const status = await response.json();
+                    if (status.state === 'complete') {
+                        renderClassificationPreview({ ...status, session_id: sessionId });
+                        downloadBtn.href = downloadUrl;
+                        setProgress(
+                            100,
+                            'Separation completed',
+                            `${totalImages} images uploaded: ${status.exterior.length} exterior and ${status.interior.length} interior.`
+                        );
+                        downloadBtn.classList.remove('hidden');
+                        return;
+                    }
+
+                    if (status.state === 'failed') {
+                        setProgress(0, 'Classification failed', status.detail || 'Please try uploading again.');
+                        uploadBtn.style.display = '';
+                        uploadBtn.disabled = selectedFiles.length === 0;
+                        return;
+                    }
+
+                    setProgress(85, 'Classifying images...', `${totalImages} images are saved in MinIO and being processed.`);
+                } catch (error) {
+                    console.error(error);
+                    setProgress(85, 'Waiting for status...', 'Processing may continue; reconnecting to the server.');
+                }
+
+                await new Promise((resolve) => window.setTimeout(resolve, 2500));
             }
         }
 
@@ -866,32 +927,31 @@
 
             xhr.upload.onprogress = (e) => {
                 if (e.lengthComputable) {
-                    const percent = Math.min(80, Math.round((e.loaded / e.total) * 80));
+                    const percent = Math.min(60, Math.round((e.loaded / e.total) * 60));
                     setProgress(percent, 'Uploading images...', 'Sending files to server...');
                 }
             };
 
-            xhr.onreadystatechange = () => {
-                if (xhr.readyState === 2) {
-                    setProgress(85, 'Processing separation...', 'Classification is in progress on the server...');
-                }
+            xhr.upload.onload = () => {
+                setProgress(65, 'Saving images...', 'The server is saving your files to MinIO.');
             };
 
             xhr.onload = () => {
-                if (xhr.status === 200 && xhr.response) {
+                if (xhr.status === 202 && xhr.response) {
                     const data = xhr.response;
-                    renderClassificationPreview(data);
-                    downloadBtn.href = data.download_url;
-                    statusPanel.classList.remove('hidden');
-                    setProgress(100, 'Separation Completed', 'Your ZIP file is ready for download.');
-                    downloadBtn.classList.remove('hidden');
+                    setProgress(75, 'Images saved', 'MinIO has the uploads. Classification is starting.');
+                    pollSessionStatus(data.session_id, data.status_url, data.download_url, selectedFiles.length);
                 } else {
+                    uploadBtn.style.display = '';
+                    uploadBtn.disabled = selectedFiles.length === 0;
                     setProgress(0, 'Upload failed', 'Server returned an error. Please try again.');
                 }
             };
 
             xhr.onerror = () => {
-                setProgress(0, 'Upload failed', 'Network error. Please try again.');
+                uploadBtn.style.display = '';
+                uploadBtn.disabled = selectedFiles.length === 0;
+                setProgress(0, 'Connection lost', 'Check MinIO before retrying; the server may have received some or all of these images.');
             };
 
             xhr.send(formData);
