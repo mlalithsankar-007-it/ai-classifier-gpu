@@ -10,7 +10,7 @@ jobs:
     runs-on: ocp-ai-runner
 
     env:
-      NEXUS_REGISTRY: nexus.apps.proxmox-ocp-ha.ocpai.com
+      NEXUS_REGISTRY: nexus-registry.proxmox-ocp-ha.ocpai.com
       IMAGE_NAME: ai-classifier-gpu
 
     steps:
